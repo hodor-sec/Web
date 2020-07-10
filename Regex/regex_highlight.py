@@ -17,7 +17,7 @@ clr_reset = Fore.RESET
 # Highlight the text via regex
 def highlight_text(color,line,pat,ign_case):
     if ign_case == '1':
-        if re.search(rf'({pat})',line):
+        if re.search(rf'({pat})',line,flags=re.IGNORECASE):
             return re.sub(rf'({pat})',color + r'\1' + clr_reset,line,flags=re.IGNORECASE).rstrip()
     else:
         if re.search(rf'({pat})',line):
