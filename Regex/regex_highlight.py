@@ -1,8 +1,10 @@
+#!/usr/bin/env python3
+#
 # Created by: hodorsec
 # Description:
 # Used for analyzing directories containing code or files, searching for a specific regex and highlighting the hits per file and line
 #
-#!/usr/bin/env python3
+#
 import sys
 import re
 import os
