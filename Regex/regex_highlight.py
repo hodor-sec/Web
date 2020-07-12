@@ -10,7 +10,7 @@ import glob
 from colorama import Fore, Style
 
 # Color vars
-clr_file = Fore.GREEN
+clr_file = Fore.BLUE
 clr_match = Fore.RED
 clr_reset = Fore.RESET
 
