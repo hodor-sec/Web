@@ -9,7 +9,7 @@ from random_useragent.random_useragent import Randomize     # Randomize useragen
 
 # Optionally, use a proxy
 # proxy = "http://<user>:<pass>@<proxy>:<port>"
-proxy = "http://localhost:8080"
+proxy = ""
 os.environ['http_proxy'] = proxy
 os.environ['HTTP_PROXY'] = proxy
 os.environ['https_proxy'] = proxy

