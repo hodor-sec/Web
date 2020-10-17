@@ -52,7 +52,7 @@ if __name__ == '__main__':
                 for line in lines:
                     matched = highlight_text(clr_match,line,pat,ign_case)
                     if matched:
-                        print(clr_file + fn + clr_reset + ":" + str(count) + ":" + matched)
+                        print(clr_file + fn[2:] + clr_reset + ":" + str(count) + ":" + matched)
                     count += 1
             except KeyboardInterrupt:
                 print("\n\n[!] User requested an interrupt, exiting...\n")
