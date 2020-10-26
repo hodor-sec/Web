@@ -3,21 +3,15 @@ import requests
 import urllib3
 import os
 import sys
+import argparse
+from urllib.parse import urlparse
 from random_useragent.random_useragent import Randomize     # Randomize useragent
-
-# Optionally, use a proxy
-# proxy = "http://<user>:<pass>@<proxy>:<port>"
-proxy = ""
-os.environ['http_proxy'] = proxy
-os.environ['HTTP_PROXY'] = proxy
-os.environ['https_proxy'] = proxy
-os.environ['HTTPS_PROXY'] = proxy
 
 # Disable cert warnings
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Set timeout
-timeout = 5
+timeout = 10
 
 # Handle CTRL-C
 def keyboard_interrupt():
@@ -34,27 +28,35 @@ def http_headers():
     }
     return headers
 
-def get_session(url,headers):
+# Check if URL is an URL
+def isurl(urlstr):
+    try:
+        urlparse(urlstr)
+        return urlstr
+    except ArgumentTypeError:
+        raise argparse.ArgumentTypeError("Invalid URL")
+
+def get_session(target_url,proxies,headers):
     """
     In: URL, HTTP Headers
     Performs: Initial call to receive session ID
     Out: Python requests Session
     """
     session = requests.session()
-    r = session.get(url,headers=headers,timeout=timeout,verify=False)
+    r = session.get(target_url,headers=headers,timeout=timeout,allow_redirects=False,verify=False,proxies=proxies)
     return session
 
-def do_request(url,headers,session):
+def do_request(target_url,proxies,headers,session):
     """
     In: URL, HTTP Headers, Python requests session
     Performs: Example cookie handling and HTTP GET call
     Out: Python requests
     """
-    cookie_key_value = {key:value}
+    cookie_key_value = {'key':'value'}
     cookie_dummy = {'DUMMY':'DUMMYVAL'}
     requests.utils.add_dict_to_cookiejar(session.cookies, cookie_key_value)
     requests.utils.add_dict_to_cookiejar(session.cookies, cookie_dummy)
-    r = session.get(url,headers=headers,timeout=timeout,allow_redirects=False,verify=False)
+    r = session.get(target_url,headers=headers,timeout=timeout,allow_redirects=False,verify=False,proxies=proxies)
     return r
 
 #######
@@ -63,17 +65,32 @@ def do_request(url,headers,session):
 
 # Main
 def main(argv):
-    if len(sys.argv) == 3:
-        host = sys.argv[1]
-        port = sys.argv[2]
-    else:
-        print("[*] Usage: " + sys.argv[0] + " <host> <port>\n")
-        exit(0)
+    parser = argparse.ArgumentParser(description='Python Web Template')
+    parser.add_argument("--url", "-u", type=isurl, required=True, help="The url of the target.")
+    parser.add_argument("--proxy", "-p", type=isurl, required=False, help="Example: http://127.0.0.1:8080")
+    args = parser.parse_args()
+    
+    # Check if target URL is valid
+    url_parts = urlparse(args.url)
+    target_url = "%s://%s" % (url_parts.scheme, url_parts.netloc)
+	
+    # Set optional proxy
+    proxies = {}
+    if(args.proxy != None):
+        proxy_parts = urlparse(args.proxy)
+        proxies = {
+            "http": "http://" + proxy_parts.netloc,
+            "https": "https://" + proxy_parts.netloc,
+        }            
+
+    # Set HTTP Headers
+    headers = http_headers()
 
     # Do stuff
     try:
-        session = get_session(url,headers)
-        do_request(url,headers,session)
+        session = get_session(target_url,proxies,headers)
+        r = do_request(target_url,proxies,headers,session)
+        print(r.text)
     except requests.exceptions.Timeout:
         print("[!] Timeout error\n")
         exit(-1)
