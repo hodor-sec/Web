@@ -1,6 +1,6 @@
 @echo off
 
-set PROGRAM=%1
+set PROGRAM=rev_shell.c
 set BASENAME=%PROGRAM:~0,-2%
 
 @echo on
