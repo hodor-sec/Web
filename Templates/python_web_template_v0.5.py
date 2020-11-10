@@ -72,7 +72,7 @@ def main(argv):
     
     # Check if target URL is valid
     url_parts = urlparse(args.url)
-    target_url = "%s://%s" % (url_parts.scheme, url_parts.netloc)
+    target_url = "%s://%s%s" % (url_parts.scheme,url_parts.netloc,url_parts.path)
 	
     # Set optional proxy
     proxies = {}
