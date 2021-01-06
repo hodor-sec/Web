@@ -2,7 +2,7 @@
 #
 # Created by: hodorsec
 # Description: Used for analyzing directories containing code or files, searching for a specific regex and highlighting the hits per file and line
-# Version: 0.8
+# Version: 0.8.1
 #
 import sys
 import re
@@ -47,8 +47,7 @@ if __name__ == '__main__':
         ext = ""
 
     # Use globbing for globbering through directories and files, alphabetically sorted
-    # for fn in sorted(glob.iglob(directory + "/**" + ext,recursive=True),key=str.casefold):
-    for fn in sorted(glob.iglob(directory + "**/*" + ext,recursive=True),key=str.casefold):
+    for fn in sorted(glob.iglob(directory + "/**" + ext,recursive=True),key=str.casefold):
         if os.path.isfile(fn):
             try:
                 with open(fn,'r') as f:
@@ -61,7 +60,11 @@ if __name__ == '__main__':
                 for line in lines:
                     matched = highlight_text(clr_match,line,pattern,ign_case)
                     if matched:
-                        print(clr_file + fn[0:] + clr_reset + ":" + str(count) + ":" + matched)
+                        # Dirty hack to work around directory "./" prefix
+                        if directory == ".":
+                            print(clr_file + fn[2:] + clr_reset + ":" + str(count) + ":" + matched)
+                        else:
+                            print(clr_file + fn[0:] + clr_reset + ":" + str(count) + ":" + matched)
                     count += 1
             except KeyboardInterrupt:
                 print("\n\n[!] User requested an interrupt, exiting...\n")
